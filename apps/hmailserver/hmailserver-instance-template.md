@@ -1,8 +1,37 @@
-Instance Role
+###Instance Role
 
+Policy Managed AmazonSSMManagedInstanceCore
 
+Policy S3 Bucket Access
 
-Instance Userdata
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "ListObjectsInBucket",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket"
+            ],
+            "Resource": [
+                "arn:aws:s3:::REPLACEWITHBUCKETNAME"
+            ]
+        },
+        {
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "s3:Get*",
+                "s3:List*"
+            ],
+            "Resource": "arn:aws:s3:::REPLACEWITHBUCKETNAME/*"
+        }
+    ]
+}
+```
+
+###Instance Userdata
 
 ```
 <powershell>
