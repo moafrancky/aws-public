@@ -35,8 +35,13 @@ Policy S3 Bucket Access
 
 ```
 <powershell>
+$domain=(Get-SSMParameter -Name 'hmailserver-domain').value
+$email=(Get-SSMParameter -Name 'hmailserver-letsencrypt-email').value
+$ec2role=(Get-SSMParameter -Name 'hmailserver-ec2role').value
 $adminpassword=(Get-SSMParameter -Name 'hmailserver-admin-password').value
 $s3bucket=(Get-SSMParameter -Name 'hmailserver-s3-installationfiles-bucket').value
+$downloadfolder="c:\users\administrator\downloads"
+$winacmefolder=$Env:Programfiles+"\win-acme"
 
 write-host ""
 
@@ -45,6 +50,12 @@ Install-WindowsFeature Net-Framework-Core
 
 write-host "Downloading HMS..."
 Read-S3Object -BucketName $s3bucket -key "hMailServer-5.6.7-B2425.exe" -File:"c:\users\administrator\downloads\hmailserver-setup.exe"
+
+write-host "Downloading LetsEncrypt ACME..."
+Read-S3Object -BucketName $s3bucket -key "plugin.validation.dns.route53.v2.1.8.847.zip" -File:"c:\users\administrator\downloads\plugin.validation.dns.route53.zip"
+Read-S3Object -BucketName $s3bucket -key "win-acme.v2.1.8.847.x64.pluggable.zip" -File:"c:\users\administrator\downloads\win-acme.zip"
+expand-archive $downloadfolder\win-acme.zip $winacmefolder
+expand-archive $downloadfolder\plugin.validation.dns.route53.zip $winacmefolder
 
 write-host "Installing HMS..."
 c:\users\administrator\downloads\hmailserver-setup.exe /verysilent
@@ -82,6 +93,8 @@ $hm.Authenticate("administrator", "") | Out-Null
 
 write-host "Set HMS admin password..."
 $hm.Settings.SetAdministratorPassword($adminpassword)
+
+& "$winacmefolder\wacs.exe" --target manual --host $domain --validation route53 --validationmode dns-01 --route53iamrole $ec2role --store pemfiles --pemfilespath C:\certs --emailaddress $email --accepttos --usedefaulttaskuser --verbose
 
 write-host "Changing hostname and reboot..."
 Rename-Computer -NewName "hmailserver" -Restart -ErrorAction Stop
