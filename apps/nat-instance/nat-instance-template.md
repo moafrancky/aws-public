@@ -34,39 +34,43 @@ sudo iptables -F
 sudo iptables -X
 
 ######### Create IPSet + add it to iptables
-sudo ipset create blacklist hash:ip hashsize 4096
-sudo iptables -I INPUT   -m set --match-set blacklist src -j DROP
-sudo iptables -I FORWARD -m set --match-set blacklist src -j DROP
+sudo ipset create blocklist hash:ip hashsize 4096
+sudo ipset create blocklist_new hash:ip hashsize 4096
+sudo iptables -I INPUT   -m set --match-set blocklist src -j DROP
+sudo iptables -I FORWARD -m set --match-set blocklist src -j DROP
 
 ######### Create blocklist-refresh.sh script
 sudo cat >~/blocklist-refresh.sh <<EOF
 #!/bin/bash
  
-BLACKLIST_FILE="/var/local/BlackListIP.txt"
-BLACKLIST_FILE_TMP="/var/local/BlackListIP.tmp"
+BLOCKLIST_FILE="/var/local/BlockListIP.txt"
+BLOCKLIST_FILE_TMP="/var/local/BlockListIP.tmp"
  
-BLACKLISTS=(
+BLOCKLISTS=(
 "http://danger.rulez.sk/projects/bruteforceblocker/blist.php"
 "http://cinsscore.com/list/ci-badguys.txt"
 "https://lists.blocklist.de/lists/all.txt"
 )
  
-for liste in "\${BLACKLISTS[@]}"
+for liste in "\${BLOCKLISTS[@]}"
 do
     LISTE_TMP=\$(curl "\$liste")
-    echo "\$LISTE_TMP" | grep -Po '(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?' >> \$BLACKLIST_FILE_TMP
+    echo "\$LISTE_TMP" | grep -Po '(?:\d{1,3}\.){3}\d{1,3}(?:/\d{1,2})?' >> \$BLOCKLIST_FILE_TMP
 done
  
-sort -n -t . -k 1,1 -k 2,2 -k 3,3 -k 4,4 \$BLACKLIST_FILE_TMP | uniq > \$BLACKLIST_FILE
-rm \$BLACKLIST_FILE_TMP
+sort -n -t . -k 1,1 -k 2,2 -k 3,3 -k 4,4 \$BLOCKLIST_FILE_TMP | uniq > \$BLOCKLIST_FILE
+rm \$BLOCKLIST_FILE_TMP
  
-# Flush de la table blacklist pour éviter les doublons.
-ipset flush blacklist  > /dev/null
+# Flush de la table blocklist pour éviter les doublons.
+ipset flush blocklist_new  > /dev/null
  
 while read ip
 do
-    ipset add blacklist \$ip
-done < \$BLACKLIST_FILE
+    ipset add blocklist_new \$ip
+done < \$BLOCKLIST_FILE
+
+ipset swap blocklist blocklist_new
+
 EOF
 
 ######### Move blocklist-refresh.sh to /usr/local/bin
@@ -92,6 +96,10 @@ echo "net.ipv4.ip_forward = 1" >> ~/sysctl.conf
 sudo mv -f ~/sysctl.conf /etc/sysctl.conf
 sudo chown root:root /etc/sysctl.conf
 sudo sysctl -p
+
+######### Adjust iptables with ipset blocklist
+sudo iptables -I INPUT   -m set --match-set blocklist src -j DROP
+sudo iptables -I FORWARD -m set --match-set blocklist src -j DROP
 
 ######### Adjust iptables with Private network CIDR 
 sudo iptables -t nat -A POSTROUTING -o eth0 -s $PRIVATESUBNETCIDR -j MASQUERADE
