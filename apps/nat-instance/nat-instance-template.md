@@ -97,10 +97,6 @@ sudo mv -f ~/sysctl.conf /etc/sysctl.conf
 sudo chown root:root /etc/sysctl.conf
 sudo sysctl -p
 
-######### Adjust iptables with ipset blocklist
-sudo iptables -I INPUT   -m set --match-set blocklist src -j DROP
-sudo iptables -I FORWARD -m set --match-set blocklist src -j DROP
-
 ######### Adjust iptables with Private network CIDR 
 sudo iptables -t nat -A POSTROUTING -o eth0 -s $PRIVATESUBNETCIDR -j MASQUERADE
 
