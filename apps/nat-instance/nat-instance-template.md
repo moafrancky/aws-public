@@ -1,11 +1,19 @@
+###Instance Source/Dest Check
+
+/!\ /!\ /!\ Don't forget to disable 'Source/Destination Check' 
+
 ###Instance Role
 
 Policy - Managed - AmazonSSMManagedInstanceCore
 
 ###Security Groups
 
-To NAT Instance INBOUND, add Private subnet CIDR 
+INBOUND
 
+- Private subnet CIDR 
+- SSH Access (restricted to some IPs)
+- Ports that will be NATed to private network (Public RDPPort, 25, 587)
+ 
 ###Routes & Associations
 
 To Private subnet routes, add NAT Instance as the target (Destination 0.0.0.0/0)
@@ -15,6 +23,8 @@ Add private subnet to subnet association to route the traffic
 ###Instance Userdata
 
 ```
+#!/bin/bash
+
 ######### Install & Update
 sudo yum -y update
 sudo yum -y upgrade
@@ -28,10 +38,26 @@ sudo systemctl start iptables
 ######### Read SSM Parameters
 PRIVATESUBNETCIDR=$(aws ssm get-parameter --name "nat-privatesubnet" --region="eu-west-1"  | jq -r ".Parameter.Value")
 EMAILSERVERIP=$(aws ssm get-parameter --name "nat-emailserverprivateip" --region="eu-west-1"  | jq -r ".Parameter.Value")
+EMAILSERVERPUBLICRDPPORT=$(aws ssm get-parameter --name "nat-emailserverpublicrdpport" --region="eu-west-1"  | jq -r ".Parameter.Value")
 
 ######### Remove Old rules
 sudo iptables -F
+sudo iptables -F -t nat
 sudo iptables -X
+
+######### Iptables Logging Chain
+sudo iptables -N LOGGING
+
+######### Only SSH access on this machine
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+sudo iptables -A INPUT -i lo -j ACCEPT
+sudo iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+sudo iptables -A INPUT -j LOGGING
+sudo iptables -P INPUT DROP
+
+######### Log dropped connections
+sudo iptables -A LOGGING -m limit --limit 2/min -j LOG --log-prefix "IPTables-Dropped: " --log-level 4
+sudo iptables -A LOGGING -j DROP
 
 ######### Create IPSet + add it to iptables
 sudo ipset create blocklist hash:ip hashsize 4096
@@ -102,7 +128,8 @@ sudo iptables -t nat -A POSTROUTING -o eth0 -s $PRIVATESUBNETCIDR -j MASQUERADE
 
 ######### Enable Port NAT
 sudo iptables -t nat -A PREROUTING -p tcp --dport 25 -j DNAT --to-destination $EMAILSERVERIP:25
-sudo iptables -t nat -A PREROUTING -p tcp --dport 3389 -j DNAT --to-destination $EMAILSERVERIP:3389
+sudo iptables -t nat -A PREROUTING -p tcp --dport 587 -j DNAT --to-destination $EMAILSERVERIP:587
+sudo iptables -t nat -A PREROUTING -p tcp --dport $EMAILSERVERPUBLICRDPPORT -j DNAT --to-destination $EMAILSERVERIP:3389
 
 ######### Save iptables & ipset rules
 sudo service iptables save
