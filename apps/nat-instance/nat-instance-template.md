@@ -127,6 +127,7 @@ sudo sysctl -p
 sudo iptables -t nat -A POSTROUTING -o eth0 -s $PRIVATESUBNETCIDR -j MASQUERADE
 
 ######### Enable Port NAT
+sudo iptables -t nat -A PREROUTING -p tcp --dport 993 -j DNAT --to-destination $EMAILSERVERIP:993
 sudo iptables -t nat -A PREROUTING -p tcp --dport 25 -j DNAT --to-destination $EMAILSERVERIP:25
 sudo iptables -t nat -A PREROUTING -p tcp --dport 587 -j DNAT --to-destination $EMAILSERVERIP:587
 sudo iptables -t nat -A PREROUTING -p tcp --dport $EMAILSERVERPUBLICRDPPORT -j DNAT --to-destination $EMAILSERVERIP:3389
